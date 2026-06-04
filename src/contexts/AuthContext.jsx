@@ -11,14 +11,21 @@ export const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    setIsLoading(false);
+    let isMounted = true;
 
     const unsubscribe = authClient.subscribe((model) => {
       setUser(model);
       setIsAuthenticated(authClient.isValid);
     });
 
+    authClient.initialize().finally(() => {
+      if (isMounted) {
+        setIsLoading(false);
+      }
+    });
+
     return () => {
+      isMounted = false;
       unsubscribe();
     };
   }, []);
@@ -31,8 +38,8 @@ export const AuthProvider = ({ children }) => {
     return authClient.signup(email, password, name);
   };
 
-  const logout = () => {
-    authClient.logout();
+  const logout = async () => {
+    await authClient.logout();
     toast.success('Desconectado com sucesso!');
   };
 

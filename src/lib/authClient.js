@@ -1,7 +1,10 @@
 import PocketBase from 'pocketbase';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 const LOCAL_USERS_KEY = 'minerva_local_users';
 const LOCAL_SESSION_KEY = 'minerva_local_session';
+
+const runtimeConfig = () => globalThis.__MINERVA_CONFIG__ || {};
 
 const parseJson = (value, fallback) => {
   if (!value) {
@@ -37,6 +40,22 @@ const createUserModel = ({ email, name }) => ({
   name,
   collectionName: 'users',
 });
+
+const createSupabaseUserModel = (user) => {
+  if (!user) {
+    return null;
+  }
+
+  const email = user.email || '';
+  const name = user.user_metadata?.name || user.user_metadata?.full_name || email;
+
+  return {
+    id: user.id,
+    email,
+    name,
+    collectionName: 'users',
+  };
+};
 
 const toHex = (bytes) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 
@@ -78,6 +97,11 @@ export const createLocalAuthClient = (storage = globalThis.localStorage || creat
       return () => {
         listeners.delete(listener);
       };
+    },
+
+    async initialize() {
+      notify();
+      return readSession();
     },
 
     async login(email, password) {
@@ -124,6 +148,100 @@ export const createLocalAuthClient = (storage = globalThis.localStorage || creat
   };
 };
 
+export const createSupabaseAuthClient = ({
+  supabaseUrl,
+  supabasePublishableKey,
+  createClient = createSupabaseClient,
+}) => {
+  const supabase = createClient(supabaseUrl, supabasePublishableKey);
+  const listeners = new Set();
+  let currentUser = null;
+
+  const setSession = (session) => {
+    currentUser = createSupabaseUserModel(session?.user);
+    listeners.forEach((listener) => listener(currentUser));
+  };
+
+  return {
+    get model() {
+      return currentUser;
+    },
+
+    get isValid() {
+      return Boolean(currentUser);
+    },
+
+    subscribe(listener) {
+      listeners.add(listener);
+
+      const { data } = supabase.auth.onAuthStateChange((event, session) => {
+        setSession(session);
+      });
+
+      return () => {
+        listeners.delete(listener);
+        data?.subscription?.unsubscribe();
+      };
+    },
+
+    async initialize() {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error('Supabase session error:', error);
+        setSession(null);
+        return null;
+      }
+
+      setSession(data?.session || null);
+      return currentUser;
+    },
+
+    async login(email, password) {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        console.error('Login error:', error);
+        return { success: false, error: error.message || 'Login falhou. Verifique suas credenciais.' };
+      }
+
+      setSession(data?.session || (data?.user ? { user: data.user } : null));
+
+      return { success: true, data };
+    },
+
+    async signup(email, password, name) {
+      const cleanName = String(name || '').trim();
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { name: cleanName } },
+      });
+
+      if (error) {
+        console.error('Signup error:', error);
+        return { success: false, error: error.message || 'Falha ao criar conta.' };
+      }
+
+      if (data?.session) {
+        setSession(data.session);
+      }
+
+      return { success: true, data };
+    },
+
+    async logout() {
+      const { error } = await supabase.auth.signOut();
+
+      if (error) {
+        console.error('Logout error:', error);
+      }
+
+      setSession(null);
+    },
+  };
+};
+
 export const createPocketBaseAuthClient = (pocketBaseUrl) => {
   const pb = new PocketBase(pocketBaseUrl);
 
@@ -140,6 +258,10 @@ export const createPocketBaseAuthClient = (pocketBaseUrl) => {
       return pb.authStore.onChange((token, model) => {
         listener(model);
       });
+    },
+
+    async initialize() {
+      return pb.authStore.model;
     },
 
     async login(email, password) {
@@ -175,9 +297,22 @@ export const createPocketBaseAuthClient = (pocketBaseUrl) => {
 };
 
 export const createAuthClient = ({
+  supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || runtimeConfig().VITE_SUPABASE_URL,
+  supabasePublishableKey = (
+    import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY || runtimeConfig().VITE_SUPABASE_PUBLISHABLE_KEY
+  ),
+  createSupabaseClient: createSupabaseClientOverride = createSupabaseClient,
   pocketBaseUrl = import.meta.env?.VITE_POCKETBASE_URL,
   storage = globalThis.localStorage,
 } = {}) => {
+  if (supabaseUrl && supabasePublishableKey) {
+    return createSupabaseAuthClient({
+      supabaseUrl,
+      supabasePublishableKey,
+      createClient: createSupabaseClientOverride,
+    });
+  }
+
   if (pocketBaseUrl) {
     return createPocketBaseAuthClient(pocketBaseUrl);
   }
