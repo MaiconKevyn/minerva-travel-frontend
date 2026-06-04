@@ -9,6 +9,7 @@ import { ThemeProvider } from './contexts/ThemeContext.jsx';
 import HomePage from './pages/HomePage.jsx';
 import SignupPage from './pages/SignupPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
+import ResetPasswordPage from './pages/ResetPasswordPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import PricingPage from './pages/PricingPage.jsx';
 import ProtectedCreateGuidePage from './pages/ProtectedCreateGuidePage.jsx';
@@ -25,6 +26,7 @@ function App() {
             <Route path="/pricing" element={<PricingPage />} />
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             <Route path="/dashboard" element={
               <ProtectedRoute>

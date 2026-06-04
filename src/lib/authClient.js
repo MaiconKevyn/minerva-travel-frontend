@@ -41,6 +41,21 @@ const createUserModel = ({ email, name }) => ({
   collectionName: 'users',
 });
 
+const formatAuthError = (error, fallback) => {
+  const message = error?.message || '';
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes('email not confirmed')) {
+    return 'Este email ainda nao foi confirmado. Verifique sua caixa de entrada ou desative a confirmacao de email no Supabase para o MVP.';
+  }
+
+  if (normalized.includes('invalid login credentials')) {
+    return 'Email ou senha incorretos. Se sua conta foi criada antes do Supabase, crie uma nova conta.';
+  }
+
+  return message || fallback;
+};
+
 const createSupabaseUserModel = (user) => {
   if (!user) {
     return null;
@@ -141,6 +156,20 @@ export const createLocalAuthClient = (storage = globalThis.localStorage || creat
       return { success: true };
     },
 
+    async requestPasswordReset() {
+      return {
+        success: false,
+        error: 'Recuperacao de senha exige Supabase configurado.',
+      };
+    },
+
+    async updatePassword() {
+      return {
+        success: false,
+        error: 'Recuperacao de senha exige Supabase configurado.',
+      };
+    },
+
     logout() {
       storage.removeItem(LOCAL_SESSION_KEY);
       notify();
@@ -202,7 +231,7 @@ export const createSupabaseAuthClient = ({
 
       if (error) {
         console.error('Login error:', error);
-        return { success: false, error: error.message || 'Login falhou. Verifique suas credenciais.' };
+        return { success: false, error: formatAuthError(error, 'Login falhou. Verifique suas credenciais.') };
       }
 
       setSession(data?.session || (data?.user ? { user: data.user } : null));
@@ -220,12 +249,37 @@ export const createSupabaseAuthClient = ({
 
       if (error) {
         console.error('Signup error:', error);
-        return { success: false, error: error.message || 'Falha ao criar conta.' };
+        return { success: false, error: formatAuthError(error, 'Falha ao criar conta.') };
       }
 
       if (data?.session) {
         setSession(data.session);
       }
+
+      return { success: true, data };
+    },
+
+    async requestPasswordReset(email, redirectTo) {
+      const options = redirectTo ? { redirectTo } : undefined;
+      const { data, error } = await supabase.auth.resetPasswordForEmail(email, options);
+
+      if (error) {
+        console.error('Password reset error:', error);
+        return { success: false, error: formatAuthError(error, 'Falha ao enviar email de recuperacao.') };
+      }
+
+      return { success: true, data };
+    },
+
+    async updatePassword(password) {
+      const { data, error } = await supabase.auth.updateUser({ password });
+
+      if (error) {
+        console.error('Password update error:', error);
+        return { success: false, error: formatAuthError(error, 'Falha ao atualizar senha.') };
+      }
+
+      setSession(data?.user ? { user: data.user } : null);
 
       return { success: true, data };
     },
@@ -288,6 +342,20 @@ export const createPocketBaseAuthClient = (pocketBaseUrl) => {
         console.error('Signup error:', error);
         return { success: false, error: error.message || 'Falha ao criar conta.' };
       }
+    },
+
+    async requestPasswordReset() {
+      return {
+        success: false,
+        error: 'Recuperacao de senha exige Supabase configurado.',
+      };
+    },
+
+    async updatePassword() {
+      return {
+        success: false,
+        error: 'Recuperacao de senha exige Supabase configurado.',
+      };
     },
 
     logout() {

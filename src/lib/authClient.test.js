@@ -98,6 +98,16 @@ test('createAuthClient uses Supabase auth when Supabase variables are configured
 
         return { error: null };
       },
+      resetPasswordForEmail: async (email, options) => {
+        calls.push(['resetPasswordForEmail', email, options]);
+
+        return { data: {}, error: null };
+      },
+      updateUser: async (attributes) => {
+        calls.push(['updateUser', attributes]);
+
+        return { data: { user: signedInUser }, error: null };
+      },
     },
   };
   const authClient = createAuthClient({
@@ -148,6 +158,89 @@ test('createAuthClient uses Supabase auth when Supabase variables are configured
 
   unsubscribe();
   assert.equal(calls.some((call) => call[0] === 'unsubscribe'), true);
+});
+
+test('Supabase auth sends password reset email with redirect URL', async () => {
+  const calls = [];
+  const authClient = createAuthClient({
+    supabaseUrl: 'https://project.supabase.co',
+    supabasePublishableKey: 'sb_publishable_test',
+    createSupabaseClient: () => ({
+      auth: {
+        getSession: async () => ({ data: { session: null }, error: null }),
+        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+        resetPasswordForEmail: async (email, options) => {
+          calls.push([email, options]);
+
+          return { data: {}, error: null };
+        },
+      },
+    }),
+  });
+
+  const result = await authClient.requestPasswordReset(
+    'mae@example.com',
+    'https://example.com/reset-password',
+  );
+
+  assert.equal(result.success, true);
+  assert.deepEqual(calls, [
+    [
+      'mae@example.com',
+      { redirectTo: 'https://example.com/reset-password' },
+    ],
+  ]);
+});
+
+test('Supabase auth updates password after recovery redirect', async () => {
+  const calls = [];
+  const signedInUser = {
+    id: 'user-123',
+    email: 'mae@example.com',
+    user_metadata: { name: 'Mae' },
+  };
+  const authClient = createAuthClient({
+    supabaseUrl: 'https://project.supabase.co',
+    supabasePublishableKey: 'sb_publishable_test',
+    createSupabaseClient: () => ({
+      auth: {
+        getSession: async () => ({ data: { session: { user: signedInUser } }, error: null }),
+        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+        updateUser: async (attributes) => {
+          calls.push(attributes);
+
+          return { data: { user: signedInUser }, error: null };
+        },
+      },
+    }),
+  });
+
+  const result = await authClient.updatePassword('NovaSenha123');
+
+  assert.equal(result.success, true);
+  assert.deepEqual(calls, [{ password: 'NovaSenha123' }]);
+});
+
+test('Supabase auth returns a clear message when email is not confirmed', async () => {
+  const authClient = createAuthClient({
+    supabaseUrl: 'https://project.supabase.co',
+    supabasePublishableKey: 'sb_publishable_test',
+    createSupabaseClient: () => ({
+      auth: {
+        getSession: async () => ({ data: { session: null }, error: null }),
+        onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+        signInWithPassword: async () => ({
+          data: { session: null },
+          error: { message: 'Email not confirmed' },
+        }),
+      },
+    }),
+  });
+
+  const result = await authClient.login('mae@example.com', 'Senha123');
+
+  assert.equal(result.success, false);
+  assert.match(result.error, /email ainda nao foi confirmado/i);
 });
 
 test('createAuthClient can read Supabase config from runtime config file', () => {

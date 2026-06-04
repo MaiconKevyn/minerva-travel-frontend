@@ -38,13 +38,23 @@ export const AuthProvider = ({ children }) => {
     return authClient.signup(email, password, name);
   };
 
+  const requestPasswordReset = async (email, redirectTo) => {
+    return authClient.requestPasswordReset(email, redirectTo);
+  };
+
+  const updatePassword = async (password) => {
+    return authClient.updatePassword(password);
+  };
+
   const logout = async () => {
     await authClient.logout();
     toast.success('Desconectado com sucesso!');
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, isLoading, login, signup, logout }}>
+    <AuthContext.Provider
+      value={{ user, isAuthenticated, isLoading, login, signup, requestPasswordReset, updatePassword, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

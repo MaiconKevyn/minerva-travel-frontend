@@ -14,8 +14,9 @@ const LoginPage = () => {
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
-  const { login } = useAuth();
+  const { login, requestPasswordReset } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -31,10 +32,31 @@ const LoginPage = () => {
       toast.success('Bem-vindo de volta às aventuras!');
       navigate(from, { replace: true });
     } else {
-      toast.error('Email ou senha incorretos. Tente novamente!');
+      toast.error(result.error || 'Email ou senha incorretos. Tente novamente!');
     }
 
     setIsSubmitting(false);
+  };
+
+  const handlePasswordReset = async () => {
+    const cleanEmail = email.trim();
+
+    if (!cleanEmail) {
+      toast.error('Digite seu email primeiro para recuperar a senha.');
+      return;
+    }
+
+    setIsResetting(true);
+    const redirectTo = `${window.location.origin}/reset-password`;
+    const result = await requestPasswordReset(cleanEmail, redirectTo);
+
+    if (result.success) {
+      toast.success('Enviamos um link de recuperação para o seu email.');
+    } else {
+      toast.error(result.error || 'Não foi possível enviar o email de recuperação.');
+    }
+
+    setIsResetting(false);
   };
 
   return (
@@ -76,8 +98,13 @@ const LoginPage = () => {
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <label className="block text-sm font-bold text-foreground">Senha Secreta</label>
-                  <button type="button" onClick={() => toast('Recuperação de senha em breve!')} className="text-xs text-secondary hover:underline font-bold">
-                    Esqueceu a senha?
+                  <button
+                    type="button"
+                    onClick={handlePasswordReset}
+                    disabled={isResetting}
+                    className="text-xs text-secondary hover:underline font-bold disabled:opacity-60 disabled:no-underline"
+                  >
+                    {isResetting ? 'Enviando...' : 'Esqueceu a senha?'}
                   </button>
                 </div>
                 <input

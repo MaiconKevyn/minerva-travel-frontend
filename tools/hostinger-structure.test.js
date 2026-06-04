@@ -53,3 +53,14 @@ test('runtime config loads before the React entrypoint', () => {
   assert.match(head, /<script src="\/config\.js"><\/script>/);
   assert.equal(index.indexOf('/config.js') < index.indexOf('/src/main.jsx'), true);
 });
+
+test('password recovery route is wired to real auth flow', () => {
+  const app = readProjectFile('src/App.jsx');
+  const loginPage = readProjectFile('src/pages/LoginPage.jsx');
+  const resetPage = readProjectFile('src/pages/ResetPasswordPage.jsx');
+
+  assert.match(app, /path="\/reset-password"/);
+  assert.match(loginPage, /requestPasswordReset/);
+  assert.doesNotMatch(loginPage, /Recupera..o de senha em breve/);
+  assert.match(resetPage, /updatePassword/);
+});
