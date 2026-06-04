@@ -1,0 +1,190 @@
+import PocketBase from 'pocketbase';
+
+const LOCAL_USERS_KEY = 'minerva_local_users';
+const LOCAL_SESSION_KEY = 'minerva_local_session';
+
+const parseJson = (value, fallback) => {
+  if (!value) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+};
+
+export const createMemoryStorage = () => {
+  const store = new Map();
+
+  return {
+    getItem: (key) => (store.has(key) ? store.get(key) : null),
+    setItem: (key, value) => {
+      store.set(key, String(value));
+    },
+    removeItem: (key) => {
+      store.delete(key);
+    },
+  };
+};
+
+const normalizeEmail = (email) => email.trim().toLowerCase();
+
+const createUserModel = ({ email, name }) => ({
+  id: `local:${email}`,
+  email,
+  name,
+  collectionName: 'users',
+});
+
+const toHex = (bytes) => Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+
+const createPasswordDigest = async (email, password) => {
+  const input = new TextEncoder().encode(`${email}:${password}`);
+
+  if (globalThis.crypto?.subtle) {
+    const digest = await globalThis.crypto.subtle.digest('SHA-256', input);
+    return `sha256:${toHex(new Uint8Array(digest))}`;
+  }
+
+  return `hex:${toHex(input)}`;
+};
+
+export const createLocalAuthClient = (storage = globalThis.localStorage || createMemoryStorage()) => {
+  const listeners = new Set();
+
+  const readUsers = () => parseJson(storage.getItem(LOCAL_USERS_KEY), {});
+  const writeUsers = (users) => storage.setItem(LOCAL_USERS_KEY, JSON.stringify(users));
+  const readSession = () => parseJson(storage.getItem(LOCAL_SESSION_KEY), null);
+
+  const notify = () => {
+    const session = readSession();
+    listeners.forEach((listener) => listener(session));
+  };
+
+  return {
+    get model() {
+      return readSession();
+    },
+
+    get isValid() {
+      return Boolean(readSession());
+    },
+
+    subscribe(listener) {
+      listeners.add(listener);
+
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+
+    async login(email, password) {
+      const users = readUsers();
+      const normalizedEmail = normalizeEmail(email);
+      const user = users[normalizedEmail];
+      const passwordDigest = user ? await createPasswordDigest(normalizedEmail, password) : null;
+
+      if (!user || user.passwordDigest !== passwordDigest) {
+        return { success: false, error: 'Login falhou. Verifique suas credenciais.' };
+      }
+
+      const model = createUserModel(user);
+      storage.setItem(LOCAL_SESSION_KEY, JSON.stringify(model));
+      notify();
+
+      return { success: true, data: { record: model, token: `local:${normalizedEmail}` } };
+    },
+
+    async signup(email, password, name) {
+      const users = readUsers();
+      const normalizedEmail = normalizeEmail(email);
+
+      if (users[normalizedEmail]) {
+        return { success: false, error: 'Este email ja esta cadastrado.' };
+      }
+
+      const passwordDigest = await createPasswordDigest(normalizedEmail, password);
+
+      users[normalizedEmail] = {
+        email: normalizedEmail,
+        passwordDigest,
+        name: String(name || '').trim() || normalizedEmail,
+      };
+      writeUsers(users);
+
+      return { success: true };
+    },
+
+    logout() {
+      storage.removeItem(LOCAL_SESSION_KEY);
+      notify();
+    },
+  };
+};
+
+export const createPocketBaseAuthClient = (pocketBaseUrl) => {
+  const pb = new PocketBase(pocketBaseUrl);
+
+  return {
+    get model() {
+      return pb.authStore.model;
+    },
+
+    get isValid() {
+      return pb.authStore.isValid;
+    },
+
+    subscribe(listener) {
+      return pb.authStore.onChange((token, model) => {
+        listener(model);
+      });
+    },
+
+    async login(email, password) {
+      try {
+        const authData = await pb.collection('users').authWithPassword(email, password, { $autoCancel: false });
+        return { success: true, data: authData };
+      } catch (error) {
+        console.error('Login error:', error);
+        return { success: false, error: error.message || 'Login falhou. Verifique suas credenciais.' };
+      }
+    },
+
+    async signup(email, password, name) {
+      try {
+        await pb.collection('users').create({
+          email,
+          password,
+          passwordConfirm: password,
+          name,
+        }, { $autoCancel: false });
+
+        return { success: true };
+      } catch (error) {
+        console.error('Signup error:', error);
+        return { success: false, error: error.message || 'Falha ao criar conta.' };
+      }
+    },
+
+    logout() {
+      pb.authStore.clear();
+    },
+  };
+};
+
+export const createAuthClient = ({
+  pocketBaseUrl = import.meta.env?.VITE_POCKETBASE_URL,
+  storage = globalThis.localStorage,
+} = {}) => {
+  if (pocketBaseUrl) {
+    return createPocketBaseAuthClient(pocketBaseUrl);
+  }
+
+  return createLocalAuthClient(storage || createMemoryStorage());
+};
+
+const authClient = createAuthClient();
+
+export default authClient;

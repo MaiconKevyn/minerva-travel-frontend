@@ -1,22 +1,21 @@
 
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import pb from '@/lib/pocketbaseClient.js';
+import authClient from '@/lib/authClient.js';
 import { toast } from 'sonner';
 
 const AuthContext = createContext({});
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(pb.authStore.model);
-  const [isAuthenticated, setIsAuthenticated] = useState(pb.authStore.isValid);
+  const [user, setUser] = useState(authClient.model);
+  const [isAuthenticated, setIsAuthenticated] = useState(authClient.isValid);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     setIsLoading(false);
 
-    // Subscribe to auth store changes
-    const unsubscribe = pb.authStore.onChange((token, model) => {
+    const unsubscribe = authClient.subscribe((model) => {
       setUser(model);
-      setIsAuthenticated(pb.authStore.isValid);
+      setIsAuthenticated(authClient.isValid);
     });
 
     return () => {
@@ -25,33 +24,15 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
-    try {
-      const authData = await pb.collection('users').authWithPassword(email, password, { $autoCancel: false });
-      return { success: true, data: authData };
-    } catch (error) {
-      console.error('Login error:', error);
-      return { success: false, error: error.message || 'Login falhou. Verifique suas credenciais.' };
-    }
+    return authClient.login(email, password);
   };
 
   const signup = async (email, password, name) => {
-    try {
-      await pb.collection('users').create({
-        email,
-        password,
-        passwordConfirm: password,
-        name
-      }, { $autoCancel: false });
-
-      return { success: true };
-    } catch (error) {
-      console.error('Signup error:', error);
-      return { success: false, error: error.message || 'Falha ao criar conta.' };
-    }
+    return authClient.signup(email, password, name);
   };
 
   const logout = () => {
-    pb.authStore.clear();
+    authClient.logout();
     toast.success('Desconectado com sucesso!');
   };
 
