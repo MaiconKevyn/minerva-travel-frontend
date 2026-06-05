@@ -104,6 +104,43 @@ test('mapRecommendationToParsedData keeps day metadata and alternatives editable
   assert.equal(data.landmarks[1].is_alternative, true);
 });
 
+test('mapRecommendationToParsedData treats Google Places stops as custom landmarks', () => {
+  const data = mapRecommendationToParsedData(
+    {
+      recommendation_source: 'google_places',
+      selected_landmarks: ['google:abc123'],
+      days: [
+        {
+          day: 1,
+          title: 'Dia 1 em Roma',
+          destination_ids: ['google-roma'],
+          stops: [
+            {
+              selection_id: 'google:abc123',
+              destination_id: 'google-roma',
+              name: 'Coliseu',
+              city: 'Roma',
+              country: 'Italia',
+              description: ['Um anfiteatro historico.'],
+              image: null,
+              duration_minutes: 90,
+              family_tip: 'Procure os arcos gigantes.',
+              match_reasons: ['Interesse da familia: historia.'],
+              categories: ['history'],
+            },
+          ],
+        },
+      ],
+      alternatives: [],
+    },
+    catalog,
+  );
+
+  assert.deepEqual(data.destinations, [{ id: 'google-roma', city: 'Roma', country: 'Italia' }]);
+  assert.equal(data.landmarks[0].id, 'google:abc123');
+  assert.equal(data.landmarks[0].is_catalog_landmark, false);
+});
+
 test('appendGuideLandmarks sends catalog ids and custom fallback separately', () => {
   const formData = new FormData();
 
@@ -127,5 +164,15 @@ test('appendGuideLandmarks sends catalog ids and custom fallback separately', ()
   });
 
   assert.deepEqual(formData.getAll('selected_landmarks'), ['lisbon:oceanario']);
-  assert.equal(formData.get('custom_landmarks'), 'Colosseum, Rome, Italy');
+  assert.equal(
+    formData.get('custom_landmarks'),
+    JSON.stringify([
+      {
+        name: 'Colosseum',
+        city: 'Rome',
+        country: 'Italy',
+        description: [],
+      },
+    ]),
+  );
 });

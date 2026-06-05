@@ -13,11 +13,8 @@ import {
 import { useConversationalGuide } from '@/contexts/ConversationalGuideContext.jsx';
 import { Button } from '@/components/ui/button';
 import {
-  fetchCatalog,
-  inferCatalogDestinationIds,
+  discoverItinerary,
   mapRecommendationToParsedData,
-  parseLandmarks,
-  recommendItinerary,
 } from '@/utils/minerva-api.js';
 import LandmarkCard from './LandmarkCard.jsx';
 import DestinationGroup from './DestinationGroup.jsx';
@@ -75,40 +72,6 @@ const Step4Attractions = () => {
     }));
   };
 
-  const processCustomAttractions = async () => {
-    const data = await parseLandmarks(destination);
-    const destinations = data.destinations || [];
-    const flattenedLandmarks = destinations.flatMap((dest) =>
-      (dest.landmarks || []).map((lm) => ({
-        id: lm.selection_id || Math.random().toString(36).substring(7),
-        name: lm.name,
-        city: dest.city,
-        country: dest.country,
-        confidence: lm.confidence || 0,
-        description: Array.isArray(lm.description) ? lm.description[0] : (lm.description || ''),
-        image: lm.image,
-        destination_id: `${dest.country}-${dest.city}`,
-        is_catalog_landmark: false,
-      }))
-    );
-    const processedDestinations = destinations.map((dest) => ({
-      id: `${dest.country}-${dest.city}`,
-      city: dest.city,
-      country: dest.country,
-    }));
-
-    setParsedData({
-      destinations: processedDestinations,
-      landmarks: flattenedLandmarks,
-    });
-    setSelectedLandmarks(
-      flattenedLandmarks
-        .filter((landmark) => landmark.confidence >= 0.7)
-        .map((landmark) => landmark.id)
-    );
-    setRecommendedItinerary(null);
-  };
-
   const processAttractions = async () => {
     if (!destination.trim()) return;
 
@@ -116,34 +79,27 @@ const Step4Attractions = () => {
     setError(null);
 
     try {
-      const catalog = await fetchCatalog();
-      const destinationIds = inferCatalogDestinationIds(destination, catalog);
+      const itinerary = await discoverItinerary({
+        destination,
+        days: itineraryPreferences.days,
+        interests: itineraryPreferences.interests,
+        pace: itineraryPreferences.pace,
+        children_ages: [],
+        must_see: [],
+      });
+      const mapped = mapRecommendationToParsedData(itinerary, null);
 
-      if (destinationIds.length > 0) {
-        const itinerary = await recommendItinerary({
-          destination_ids: destinationIds,
-          days: itineraryPreferences.days,
-          interests: itineraryPreferences.interests,
-          pace: itineraryPreferences.pace,
-          children_ages: [],
-          must_see_landmarks: [],
-        });
-        const mapped = mapRecommendationToParsedData(itinerary, catalog);
-
-        setParsedData({
-          destinations: mapped.destinations,
-          landmarks: mapped.landmarks,
-        });
-        setSelectedLandmarks(mapped.selectedLandmarks);
-        setRecommendedItinerary(itinerary);
-      } else {
-        await processCustomAttractions();
-      }
+      setParsedData({
+        destinations: mapped.destinations,
+        landmarks: mapped.landmarks,
+      });
+      setSelectedLandmarks(mapped.selectedLandmarks);
+      setRecommendedItinerary(itinerary);
 
       setHasSearchedLandmarks(true);
     } catch (err) {
       console.error('Error fetching landmarks:', err);
-      setError('Nao foi possivel montar o roteiro.');
+      setError(err.message || 'Nao foi possivel montar o roteiro.');
     } finally {
       setIsLoadingLandmarks(false);
     }

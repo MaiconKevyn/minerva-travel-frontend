@@ -42,7 +42,7 @@ const uniqueById = (items) => {
   });
 };
 
-const mapStopToLandmark = (stop, day = null, isAlternative = false) => ({
+const mapStopToLandmark = (stop, day = null, isAlternative = false, isCatalogLandmark = true) => ({
   id: stop.selection_id,
   selection_id: stop.selection_id,
   name: stop.name,
@@ -60,17 +60,24 @@ const mapStopToLandmark = (stop, day = null, isAlternative = false) => ({
   itinerary_day: day?.day || null,
   itinerary_title: day?.title || '',
   itinerary_theme: day?.theme || '',
-  is_catalog_landmark: true,
+  is_catalog_landmark: isCatalogLandmark,
   is_alternative: isAlternative,
 });
 
 export const mapRecommendationToParsedData = (recommendation, catalog) => {
+  const isCatalogRecommendation = recommendation?.recommendation_source !== 'google_places';
   const stops = (recommendation?.days || []).flatMap((day) =>
-    (day.stops || []).map((stop) => mapStopToLandmark(stop, day, false))
+    (day.stops || []).map((stop) => mapStopToLandmark(stop, day, false, isCatalogRecommendation))
   );
   const alternatives = (recommendation?.alternatives || []).map((stop) =>
-    mapStopToLandmark(stop, null, true)
+    mapStopToLandmark(stop, null, true, isCatalogRecommendation)
   );
+  const landmarksByDestinationId = [...stops, ...alternatives].reduce((acc, landmark) => {
+    if (!acc[landmark.destination_id]) {
+      acc[landmark.destination_id] = landmark;
+    }
+    return acc;
+  }, {});
   const destinationIds = [
     ...new Set([
       ...stops.map((stop) => stop.destination_id),
@@ -79,10 +86,11 @@ export const mapRecommendationToParsedData = (recommendation, catalog) => {
   ];
   const destinations = destinationIds.map((destinationId) => {
     const destination = (catalog?.destinations || []).find((item) => item.id === destinationId);
+    const landmark = landmarksByDestinationId[destinationId];
     return {
       id: destinationId,
-      city: destination?.city || destinationId,
-      country: destination?.country || '',
+      city: destination?.city || landmark?.city || destinationId,
+      country: destination?.country || landmark?.country || '',
     };
   });
 
@@ -112,9 +120,16 @@ export const appendGuideLandmarks = (formData, guideData) => {
   }
 
   if (customLandmarks.length > 0) {
-    const customLandmarksPayload = customLandmarks
-      .map((landmark) => `${landmark.name}, ${landmark.city}, ${landmark.country}`)
-      .join('\n');
+    const customLandmarksPayload = JSON.stringify(
+      customLandmarks.map((landmark) => ({
+        name: landmark.name,
+        city: landmark.city,
+        country: landmark.country,
+        description: Array.isArray(landmark.description_paragraphs)
+          ? landmark.description_paragraphs.slice(0, 3)
+          : [landmark.description].filter(Boolean).slice(0, 3),
+      }))
+    );
     formData.append('custom_landmarks', customLandmarksPayload);
   }
 };
@@ -137,6 +152,26 @@ export const recommendItinerary = async (payload) => {
   const baseUrl = apiBaseUrl();
 
   const response = await fetch(`${baseUrl}/api/itinerary/recommend`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Erro do servidor: ${response.status}`);
+  }
+
+  return response.json();
+};
+
+export const discoverItinerary = async (payload) => {
+  const baseUrl = apiBaseUrl();
+
+  const response = await fetch(`${baseUrl}/api/itinerary/discover`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
