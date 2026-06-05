@@ -42,6 +42,20 @@ const uniqueById = (items) => {
   });
 };
 
+export const buildLandmarkMapsUrl = (landmark = {}) => {
+  if (landmark.google_maps_uri) {
+    return landmark.google_maps_uri;
+  }
+  const query = [landmark.name, landmark.city, landmark.country]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  if (!query) {
+    return '';
+  }
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+};
+
 const mapStopToLandmark = (stop, day = null, isAlternative = false, isCatalogLandmark = true) => ({
   id: stop.selection_id,
   selection_id: stop.selection_id,
@@ -53,6 +67,9 @@ const mapStopToLandmark = (stop, day = null, isAlternative = false, isCatalogLan
   description_paragraphs: Array.isArray(stop.description) ? stop.description : [stop.description].filter(Boolean),
   image: stop.image,
   image_attributions: stop.image_attributions || [],
+  google_maps_uri: stop.google_maps_uri || '',
+  formatted_address: stop.formatted_address || '',
+  maps_url: buildLandmarkMapsUrl(stop),
   destination_id: stop.destination_id,
   duration_minutes: stop.duration_minutes,
   family_tip: stop.family_tip,
@@ -124,6 +141,9 @@ const mapManualLandmark = (landmark, destination = {}) => {
     description_paragraphs: descriptionParagraphs,
     image,
     image_attributions: landmark.image_attributions || [],
+    google_maps_uri: landmark.google_maps_uri || '',
+    formatted_address: landmark.formatted_address || '',
+    maps_url: buildLandmarkMapsUrl({ ...landmark, city: landmark.city || destination.city, country: landmark.country || destination.country }),
     destination_id: landmark.destination_id || destination.id,
     duration_minutes: landmark.duration_minutes || null,
     family_tip: landmark.family_tip || null,

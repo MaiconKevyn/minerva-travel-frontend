@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   appendGuideLandmarks,
+  buildLandmarkMapsUrl,
   inferCatalogDestinationIds,
   mapParsedLandmarksToParsedData,
   mapRecommendationToParsedData,
@@ -131,6 +132,8 @@ test('mapRecommendationToParsedData treats Google Places stops as custom landmar
                   uri: 'https://example.com/maria',
                 },
               ],
+              google_maps_uri: 'https://maps.google.com/?cid=abc123',
+              formatted_address: 'Piazza del Colosseo, Roma',
               duration_minutes: 90,
               family_tip: 'Procure os arcos gigantes.',
               match_reasons: ['Interesse da familia: historia.'],
@@ -147,12 +150,25 @@ test('mapRecommendationToParsedData treats Google Places stops as custom landmar
   assert.deepEqual(data.destinations, [{ id: 'google-roma', city: 'Roma', country: 'Italia' }]);
   assert.equal(data.landmarks[0].id, 'google:abc123');
   assert.equal(data.landmarks[0].is_catalog_landmark, false);
+  assert.equal(data.landmarks[0].google_maps_uri, 'https://maps.google.com/?cid=abc123');
+  assert.equal(data.landmarks[0].maps_url, 'https://maps.google.com/?cid=abc123');
   assert.deepEqual(data.landmarks[0].image_attributions, [
     {
       display_name: 'Maria Fotografa',
       uri: 'https://example.com/maria',
     },
   ]);
+});
+
+test('buildLandmarkMapsUrl falls back to a Google Maps search query', () => {
+  assert.equal(
+    buildLandmarkMapsUrl({
+      name: 'Torre Eiffel',
+      city: 'Paris',
+      country: 'Franca',
+    }),
+    'https://www.google.com/maps/search/?api=1&query=Torre%20Eiffel%20Paris%20Franca',
+  );
 });
 
 test('mapParsedLandmarksToParsedData flattens manual landmarks without itinerary suggestions', () => {
@@ -190,6 +206,10 @@ test('mapParsedLandmarksToParsedData flattens manual landmarks without itinerary
   assert.equal(data.landmarks[0].is_catalog_landmark, false);
   assert.equal(data.landmarks[0].itinerary_day, null);
   assert.equal(data.landmarks[0].description, 'Visita ja planejada pela familia.');
+  assert.equal(
+    data.landmarks[0].maps_url,
+    'https://www.google.com/maps/search/?api=1&query=Torre%20Eiffel%20Paris%20Franca',
+  );
 });
 
 test('splitQuickSuggestionLandmarks separates primary cards from alternatives', () => {

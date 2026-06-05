@@ -1,9 +1,10 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Check, Clock3, MapPin, Sparkles } from 'lucide-react';
+import { Check, Clock3, Map as MapIcon, MapPin, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { buildLandmarkMapsUrl } from '@/utils/minerva-api.js';
 
 const LandmarkCard = ({
   // Showcase Mode Props (from landmarks.js)
@@ -20,6 +21,11 @@ const LandmarkCard = ({
   const photoAttribution = data.image_attributions?.find?.(
     (attribution) => attribution.display_name || attribution.uri
   );
+  const mapsUrl = data.maps_url || buildLandmarkMapsUrl({
+    ...data,
+    city: displayCity,
+    country: destination?.country || data.country,
+  });
 
   return (
     <motion.div
@@ -52,6 +58,20 @@ const LandmarkCard = ({
 
         {/* Subtle gradient overlay for better text contrast if we had text, and depth */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+        {mapsUrl && (
+          <a
+            href={mapsUrl}
+            target="_blank"
+            rel="noreferrer"
+            title={`Abrir ${data.name} no mapa`}
+            aria-label={`Abrir ${data.name} no mapa`}
+            onClick={(event) => event.stopPropagation()}
+            className="absolute left-4 top-4 z-10 h-9 w-9 rounded-full bg-background/85 text-secondary shadow-sm backdrop-blur-sm border border-white/40 flex items-center justify-center transition-all hover:bg-background hover:text-primary hover:scale-105"
+          >
+            <MapIcon className="h-4 w-4" />
+          </a>
+        )}
 
         {photoAttribution && (
           <div className="absolute left-3 bottom-3 z-10 max-w-[calc(100%-1.5rem)] rounded-full bg-black/55 backdrop-blur-sm px-3 py-1 text-[10px] font-medium text-white/90">
