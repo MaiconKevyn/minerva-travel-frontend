@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
   CalendarDays,
-  ListChecks,
   Loader2,
   RefreshCcw,
   SlidersHorizontal,
@@ -18,6 +17,7 @@ import {
   mapParsedLandmarksToParsedData,
   mapRecommendationToParsedData,
   parseLandmarks,
+  splitQuickSuggestionLandmarks,
 } from '@/utils/minerva-api.js';
 import LandmarkCard from './LandmarkCard.jsx';
 import DestinationGroup from './DestinationGroup.jsx';
@@ -61,7 +61,10 @@ const Step4Attractions = () => {
   } = useConversationalGuide();
 
   const [error, setError] = useState(null);
-  const [loadingMode, setLoadingMode] = useState('suggestion');
+  const [loadingMode, setLoadingMode] = useState('quick');
+  const [resultMode, setResultMode] = useState('quick');
+  const [showPreferenceSetup, setShowPreferenceSetup] = useState(false);
+  const autoLoadedDestinationRef = useRef('');
 
   const updatePreference = (key, value) => {
     setItineraryPreferences((prev) => ({ ...prev, [key]: value }));
@@ -76,10 +79,64 @@ const Step4Attractions = () => {
     }));
   };
 
-  const processAttractions = async () => {
+  const applyParsedResult = useCallback((mapped, mode, itinerary = null) => {
+    setParsedData({
+      destinations: mapped.destinations,
+      landmarks: mapped.landmarks,
+    });
+    setSelectedLandmarks(mapped.selectedLandmarks);
+    setRecommendedItinerary(itinerary);
+    setResultMode(mode);
+    setHasSearchedLandmarks(true);
+  }, [
+    setHasSearchedLandmarks,
+    setParsedData,
+    setRecommendedItinerary,
+    setSelectedLandmarks,
+  ]);
+
+  const loadManualMappedLandmarks = useCallback(async () => {
+    const parsedLandmarks = await parseLandmarks(destination);
+    const mapped = mapParsedLandmarksToParsedData(parsedLandmarks);
+
+    if (mapped.landmarks.length === 0) {
+      throw new Error('Nao encontrei pontos turisticos claros no roteiro informado.');
+    }
+
+    return mapped;
+  }, [destination]);
+
+  const processManualAttractions = useCallback(async () => {
     if (!destination.trim()) return;
 
-    setLoadingMode('suggestion');
+    setLoadingMode('manual');
+    setIsLoadingLandmarks(true);
+    setError(null);
+
+    try {
+      const mapped = await loadManualMappedLandmarks();
+
+      applyParsedResult(mapped, 'manual', null);
+    } catch (err) {
+      console.error('Error parsing manual landmarks:', err);
+      setError(err.message || 'Nao foi possivel organizar o roteiro informado.');
+    } finally {
+      setIsLoadingLandmarks(false);
+    }
+  }, [
+    applyParsedResult,
+    destination,
+    loadManualMappedLandmarks,
+    setIsLoadingLandmarks,
+  ]);
+
+  const processAttractions = useCallback(async ({
+    mode = 'itinerary',
+    allowManualFallback = false,
+  } = {}) => {
+    if (!destination.trim()) return;
+
+    setLoadingMode(mode === 'quick' ? 'quick' : 'suggestion');
     setIsLoadingLandmarks(true);
     setError(null);
 
@@ -94,55 +151,64 @@ const Step4Attractions = () => {
       });
       const mapped = mapRecommendationToParsedData(itinerary, null);
 
-      setParsedData({
-        destinations: mapped.destinations,
-        landmarks: mapped.landmarks,
-      });
-      setSelectedLandmarks(mapped.selectedLandmarks);
-      setRecommendedItinerary(itinerary);
-
-      setHasSearchedLandmarks(true);
+      applyParsedResult(mapped, mode, itinerary);
+      setShowPreferenceSetup(false);
     } catch (err) {
+      if (allowManualFallback) {
+        try {
+          const mapped = await loadManualMappedLandmarks();
+          applyParsedResult(mapped, 'manual', null);
+          return;
+        } catch (manualErr) {
+          console.error('Error parsing manual landmarks after suggestion failure:', manualErr);
+        }
+      }
+
       console.error('Error fetching landmarks:', err);
       setError(err.message || 'Nao foi possivel montar o roteiro.');
     } finally {
       setIsLoadingLandmarks(false);
     }
-  };
+  }, [
+    applyParsedResult,
+    destination,
+    itineraryPreferences.days,
+    itineraryPreferences.interests,
+    itineraryPreferences.pace,
+    loadManualMappedLandmarks,
+    setIsLoadingLandmarks,
+  ]);
 
-  const processManualAttractions = async () => {
-    if (!destination.trim()) return;
+  useEffect(() => {
+    const trimmedDestination = destination.trim();
 
-    setLoadingMode('manual');
-    setIsLoadingLandmarks(true);
-    setError(null);
-
-    try {
-      const parsedLandmarks = await parseLandmarks(destination);
-      const mapped = mapParsedLandmarksToParsedData(parsedLandmarks);
-
-      if (mapped.landmarks.length === 0) {
-        throw new Error('Nao encontrei pontos turisticos claros no roteiro informado.');
-      }
-
-      setParsedData({
-        destinations: mapped.destinations,
-        landmarks: mapped.landmarks,
-      });
-      setSelectedLandmarks(mapped.selectedLandmarks);
-      setRecommendedItinerary(null);
-      setHasSearchedLandmarks(true);
-    } catch (err) {
-      console.error('Error parsing manual landmarks:', err);
-      setError(err.message || 'Nao foi possivel organizar o roteiro informado.');
-    } finally {
-      setIsLoadingLandmarks(false);
+    if (
+      !trimmedDestination ||
+      hasSearchedLandmarks ||
+      isLoadingLandmarks ||
+      error ||
+      showPreferenceSetup ||
+      autoLoadedDestinationRef.current === trimmedDestination
+    ) {
+      return;
     }
-  };
+
+    autoLoadedDestinationRef.current = trimmedDestination;
+    processAttractions({ mode: 'quick', allowManualFallback: true });
+  }, [
+    destination,
+    error,
+    hasSearchedLandmarks,
+    isLoadingLandmarks,
+    processAttractions,
+    showPreferenceSetup,
+  ]);
 
   const selectedCount = selectedLandmarks.length;
-  const catalogMode = Boolean(recommendedItinerary?.days?.length);
-  const alternatives = parsedData.landmarks.filter((landmark) => landmark.is_alternative);
+  const itineraryMode = Boolean(recommendedItinerary?.days?.length && resultMode === 'itinerary');
+  const manualMode = resultMode === 'manual';
+  const quickSections = splitQuickSuggestionLandmarks(parsedData.landmarks);
+  const alternatives = quickSections.alternatives;
 
   const renderPreferenceSetup = () => (
     <motion.div
@@ -239,11 +305,20 @@ const Step4Attractions = () => {
           <Button onClick={goBack} variant="outline" className="rounded-full py-6 px-8 text-lg">
             <ArrowLeft className="w-5 h-5 mr-2" /> Editar destino
           </Button>
-          <Button onClick={processManualAttractions} variant="outline" className="rounded-full py-6 px-8 text-lg font-bold">
-            <ListChecks className="w-5 h-5 mr-2" /> Usar meu roteiro
-          </Button>
-          <Button onClick={processAttractions} className="flex-1 rounded-full py-6 px-8 text-lg bg-primary hover:bg-primary/90 text-white font-bold">
-            Sugerir roteiro <ArrowRight className="ml-2 w-5 h-5" />
+          {parsedData.landmarks.length > 0 && (
+            <Button
+              onClick={() => setShowPreferenceSetup(false)}
+              variant="outline"
+              className="rounded-full py-6 px-8 text-lg font-bold"
+            >
+              Voltar aos cards
+            </Button>
+          )}
+          <Button
+            onClick={() => processAttractions({ mode: 'itinerary' })}
+            className="flex-1 rounded-full py-6 px-8 text-lg bg-primary hover:bg-primary/90 text-white font-bold"
+          >
+            Atualizar sugestao <ArrowRight className="ml-2 w-5 h-5" />
           </Button>
         </div>
       </div>
@@ -321,6 +396,66 @@ const Step4Attractions = () => {
     </div>
   );
 
+  const renderQuickSuggestionCards = () => (
+    <div className="space-y-12">
+      {quickSections.primary.length > 0 && (
+        <section className="space-y-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-bold uppercase tracking-[0.2em] text-primary">
+                Primeira selecao
+              </p>
+              <h3 className="text-2xl md:text-3xl font-serif font-bold text-foreground">
+                Locais citados e sugestoes alinhadas
+              </h3>
+            </div>
+            <div className="rounded-full bg-muted px-4 py-2 text-sm font-bold text-muted-foreground w-fit">
+              {quickSections.primary.filter((landmark) => selectedLandmarks.includes(landmark.id)).length} selecionados
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {quickSections.primary.map((landmark, lIdx) => (
+              <LandmarkCard
+                key={landmark.id}
+                landmark={landmark}
+                destination={{ city: landmark.city, country: landmark.country }}
+                index={lIdx}
+                isSelected={selectedLandmarks.includes(landmark.id)}
+                onToggle={toggleLandmarkSelection}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {quickSections.alternatives.length > 0 && (
+        <section className="pt-6 space-y-5 border-t border-border/60">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-[0.2em] text-secondary">
+              Mais possibilidades
+            </p>
+            <h3 className="text-2xl md:text-3xl font-serif font-bold text-foreground">
+              Extras para considerar
+            </h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {quickSections.alternatives.slice(0, 8).map((landmark, lIdx) => (
+              <LandmarkCard
+                key={landmark.id}
+                landmark={landmark}
+                destination={{ city: landmark.city, country: landmark.country }}
+                index={lIdx}
+                isSelected={selectedLandmarks.includes(landmark.id)}
+                onToggle={toggleLandmarkSelection}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+
   const renderManualGroups = () => (
     <div className="space-y-16">
       {parsedData.destinations.map((dest, dIdx) => {
@@ -346,7 +481,7 @@ const Step4Attractions = () => {
     </div>
   );
 
-  if (!hasSearchedLandmarks && !isLoadingLandmarks && !error) {
+  if (showPreferenceSetup && !isLoadingLandmarks && !error) {
     return (
       <div className="w-full max-w-5xl mx-auto flex flex-col min-h-[60vh] py-4">
         {renderPreferenceSetup()}
@@ -377,12 +512,18 @@ const Step4Attractions = () => {
             </div>
             <div className="space-y-3">
               <h2 className="text-3xl font-serif font-bold text-foreground">
-                {loadingMode === 'manual' ? 'Organizando seu roteiro...' : 'Montando seu roteiro...'}
+                {loadingMode === 'manual'
+                  ? 'Organizando seu roteiro...'
+                  : loadingMode === 'quick'
+                    ? 'Buscando locais para sua viagem...'
+                    : 'Montando seu roteiro...'}
               </h2>
               <p className="text-lg text-muted-foreground font-medium animate-pulse">
                 {loadingMode === 'manual'
                   ? 'Separando os locais que voce ja informou.'
-                  : 'Selecionando paradas com ritmo de familia.'}
+                  : loadingMode === 'quick'
+                    ? 'Combinando pontos citados com sugestoes relacionadas.'
+                    : 'Selecionando paradas com ritmo de familia.'}
               </p>
             </div>
           </motion.div>
@@ -406,12 +547,36 @@ const Step4Attractions = () => {
                 <ArrowLeft className="w-5 h-5 mr-2" /> Editar destino
               </Button>
               <Button
-                onClick={loadingMode === 'manual' ? processManualAttractions : processAttractions}
+                onClick={() => {
+                  if (loadingMode === 'manual') {
+                    processManualAttractions();
+                  } else {
+                    processAttractions({
+                      mode: loadingMode === 'quick' ? 'quick' : 'itinerary',
+                      allowManualFallback: loadingMode === 'quick',
+                    });
+                  }
+                }}
                 className="flex-1 rounded-full py-6 text-lg bg-primary hover:bg-primary/90 text-white"
               >
                 <RefreshCcw className="w-5 h-5 mr-2" /> Tentar novamente
               </Button>
             </div>
+          </motion.div>
+        ) : !hasSearchedLandmarks ? (
+          <motion.div
+            key="preparing"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex flex-col items-center justify-center py-32 space-y-4 text-center"
+          >
+            <div className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+              <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+            <h2 className="text-3xl font-serif font-bold text-foreground">
+              Preparando os cards...
+            </h2>
           </motion.div>
         ) : hasSearchedLandmarks && parsedData.landmarks.length > 0 ? (
           <motion.div
@@ -422,19 +587,40 @@ const Step4Attractions = () => {
           >
             <div className="text-center space-y-3 mb-12">
               <h2 className="text-3xl md:text-4xl font-serif font-bold text-foreground">
-                {catalogMode ? 'Roteiro sugerido para a sua familia' : 'Seu roteiro informado'}
+                {itineraryMode
+                  ? 'Roteiro sugerido para a sua familia'
+                  : manualMode
+                    ? 'Seu roteiro informado'
+                    : 'Locais encontrados para sua viagem'}
               </h2>
               <p className="text-xl text-muted-foreground font-medium max-w-2xl mx-auto">
-                {catalogMode ? recommendedItinerary.summary : 'Organizamos os pontos que voce ja citou. Selecione os locais que farao parte do guia da sua familia.'}
+                {itineraryMode
+                  ? recommendedItinerary.summary
+                  : manualMode
+                    ? 'Organizamos os pontos que voce ja citou. Selecione os locais que farao parte do guia da sua familia.'
+                    : 'Inclui pontos que voce citou e sugestoes baseadas no seu texto. Selecione o que entra no guia.'}
               </p>
-              <div className="flex justify-center pt-2">
-                <Button onClick={() => setHasSearchedLandmarks(false)} variant="outline" className="rounded-full px-6 py-3">
-                  {catalogMode ? 'Ajustar preferencias' : 'Voltar para escolha do roteiro'}
+              <div className="flex flex-col sm:flex-row justify-center gap-3 pt-2">
+                <Button onClick={goBack} variant="outline" className="rounded-full px-6 py-3">
+                  Editar destino
+                </Button>
+                <Button
+                  onClick={() => {
+                    setError(null);
+                    setShowPreferenceSetup(true);
+                  }}
+                  className="rounded-full px-6 py-3 bg-secondary hover:bg-secondary/90 text-white"
+                >
+                  Sugerir roteiro com dias e categorias
                 </Button>
               </div>
             </div>
 
-            {catalogMode ? renderItineraryDays() : renderManualGroups()}
+            {itineraryMode
+              ? renderItineraryDays()
+              : manualMode
+                ? renderManualGroups()
+                : renderQuickSuggestionCards()}
 
             <div className="flex justify-center pt-16 pb-8 sticky bottom-0 bg-gradient-to-t from-background via-background to-transparent z-10">
               <Button

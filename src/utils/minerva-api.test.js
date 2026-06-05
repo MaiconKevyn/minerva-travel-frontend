@@ -6,6 +6,7 @@ import {
   inferCatalogDestinationIds,
   mapParsedLandmarksToParsedData,
   mapRecommendationToParsedData,
+  splitQuickSuggestionLandmarks,
 } from './minerva-api.js';
 
 const catalog = {
@@ -189,6 +190,17 @@ test('mapParsedLandmarksToParsedData flattens manual landmarks without itinerary
   assert.equal(data.landmarks[0].is_catalog_landmark, false);
   assert.equal(data.landmarks[0].itinerary_day, null);
   assert.equal(data.landmarks[0].description, 'Visita ja planejada pela familia.');
+});
+
+test('splitQuickSuggestionLandmarks separates primary cards from alternatives', () => {
+  const sections = splitQuickSuggestionLandmarks([
+    { id: 'primary-1', is_alternative: false },
+    { id: 'alternative-1', is_alternative: true },
+    { id: 'primary-2' },
+  ]);
+
+  assert.deepEqual(sections.primary.map((item) => item.id), ['primary-1', 'primary-2']);
+  assert.deepEqual(sections.alternatives.map((item) => item.id), ['alternative-1']);
 });
 
 test('appendGuideLandmarks sends catalog ids and custom fallback separately', () => {

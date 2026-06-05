@@ -163,6 +163,11 @@ export const mapParsedLandmarksToParsedData = (data) => {
   };
 };
 
+export const splitQuickSuggestionLandmarks = (landmarks = []) => ({
+  primary: landmarks.filter((landmark) => !landmark.is_alternative),
+  alternatives: landmarks.filter((landmark) => landmark.is_alternative),
+});
+
 export const appendGuideLandmarks = (formData, guideData) => {
   const landmarks = guideData.landmarks || [];
   const catalogLandmarkIds = landmarks
