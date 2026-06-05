@@ -6,6 +6,7 @@ import {
   ArrowRight,
   CalendarDays,
   Loader2,
+  Map as MapIcon,
   RefreshCcw,
   SlidersHorizontal,
   Sparkles,
@@ -21,6 +22,7 @@ import {
 } from '@/utils/minerva-api.js';
 import LandmarkCard from './LandmarkCard.jsx';
 import DestinationGroup from './DestinationGroup.jsx';
+import MapOverviewModal from './MapOverviewModal.jsx';
 
 const interestOptions = [
   { label: 'Parques', value: 'parques' },
@@ -64,6 +66,7 @@ const Step4Attractions = () => {
   const [loadingMode, setLoadingMode] = useState('quick');
   const [resultMode, setResultMode] = useState('quick');
   const [showPreferenceSetup, setShowPreferenceSetup] = useState(false);
+  const [isMapOpen, setIsMapOpen] = useState(false);
   const autoLoadedDestinationRef = useRef('');
 
   const updatePreference = (key, value) => {
@@ -605,6 +608,14 @@ const Step4Attractions = () => {
                   Editar destino
                 </Button>
                 <Button
+                  onClick={() => setIsMapOpen(true)}
+                  variant="outline"
+                  className="rounded-full px-6 py-3 font-bold"
+                >
+                  <MapIcon className="mr-2 h-4 w-4" />
+                  Ver mapa da viagem
+                </Button>
+                <Button
                   onClick={() => {
                     setError(null);
                     setShowPreferenceSetup(true);
@@ -649,6 +660,14 @@ const Step4Attractions = () => {
           </motion.div>
         ) : null}
       </AnimatePresence>
+
+      <MapOverviewModal
+        open={isMapOpen}
+        landmarks={parsedData.landmarks}
+        selectedLandmarks={selectedLandmarks}
+        onToggleLandmark={toggleLandmarkSelection}
+        onClose={() => setIsMapOpen(false)}
+      />
     </div>
   );
 };

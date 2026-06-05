@@ -7,6 +7,7 @@ import {
   inferCatalogDestinationIds,
   mapParsedLandmarksToParsedData,
   mapRecommendationToParsedData,
+  mappableLandmarks,
   splitQuickSuggestionLandmarks,
 } from './minerva-api.js';
 
@@ -134,6 +135,8 @@ test('mapRecommendationToParsedData treats Google Places stops as custom landmar
               ],
               google_maps_uri: 'https://maps.google.com/?cid=abc123',
               formatted_address: 'Piazza del Colosseo, Roma',
+              latitude: 41.8902,
+              longitude: 12.4922,
               duration_minutes: 90,
               family_tip: 'Procure os arcos gigantes.',
               match_reasons: ['Interesse da familia: historia.'],
@@ -152,6 +155,8 @@ test('mapRecommendationToParsedData treats Google Places stops as custom landmar
   assert.equal(data.landmarks[0].is_catalog_landmark, false);
   assert.equal(data.landmarks[0].google_maps_uri, 'https://maps.google.com/?cid=abc123');
   assert.equal(data.landmarks[0].maps_url, 'https://maps.google.com/?cid=abc123');
+  assert.equal(data.landmarks[0].latitude, 41.8902);
+  assert.equal(data.landmarks[0].longitude, 12.4922);
   assert.deepEqual(data.landmarks[0].image_attributions, [
     {
       display_name: 'Maria Fotografa',
@@ -221,6 +226,19 @@ test('splitQuickSuggestionLandmarks separates primary cards from alternatives', 
 
   assert.deepEqual(sections.primary.map((item) => item.id), ['primary-1', 'primary-2']);
   assert.deepEqual(sections.alternatives.map((item) => item.id), ['alternative-1']);
+});
+
+test('mappableLandmarks keeps only landmarks with numeric coordinates', () => {
+  const items = mappableLandmarks([
+    { id: 'with-number', latitude: 48.8566, longitude: 2.3522 },
+    { id: 'with-string', latitude: '41.8902', longitude: '12.4922' },
+    { id: 'missing-latitude', longitude: 12.4922 },
+    { id: 'invalid', latitude: 'x', longitude: 12.4922 },
+  ]);
+
+  assert.deepEqual(items.map((item) => item.id), ['with-number', 'with-string']);
+  assert.equal(items[1].latitude, 41.8902);
+  assert.equal(items[1].longitude, 12.4922);
 });
 
 test('appendGuideLandmarks sends catalog ids and custom fallback separately', () => {

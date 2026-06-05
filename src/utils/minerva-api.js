@@ -70,6 +70,8 @@ const mapStopToLandmark = (stop, day = null, isAlternative = false, isCatalogLan
   google_maps_uri: stop.google_maps_uri || '',
   formatted_address: stop.formatted_address || '',
   maps_url: buildLandmarkMapsUrl(stop),
+  latitude: stop.latitude,
+  longitude: stop.longitude,
   destination_id: stop.destination_id,
   duration_minutes: stop.duration_minutes,
   family_tip: stop.family_tip,
@@ -144,6 +146,8 @@ const mapManualLandmark = (landmark, destination = {}) => {
     google_maps_uri: landmark.google_maps_uri || '',
     formatted_address: landmark.formatted_address || '',
     maps_url: buildLandmarkMapsUrl({ ...landmark, city: landmark.city || destination.city, country: landmark.country || destination.country }),
+    latitude: landmark.latitude,
+    longitude: landmark.longitude,
     destination_id: landmark.destination_id || destination.id,
     duration_minutes: landmark.duration_minutes || null,
     family_tip: landmark.family_tip || null,
@@ -187,6 +191,22 @@ export const splitQuickSuggestionLandmarks = (landmarks = []) => ({
   primary: landmarks.filter((landmark) => !landmark.is_alternative),
   alternatives: landmarks.filter((landmark) => landmark.is_alternative),
 });
+
+const normalizedCoordinate = (value) => {
+  const coordinate = Number(value);
+  return Number.isFinite(coordinate) ? coordinate : null;
+};
+
+export const mappableLandmarks = (landmarks = []) =>
+  landmarks
+    .map((landmark) => {
+      const latitude = normalizedCoordinate(landmark.latitude);
+      const longitude = normalizedCoordinate(landmark.longitude);
+      return latitude === null || longitude === null
+        ? null
+        : { ...landmark, latitude, longitude };
+    })
+    .filter(Boolean);
 
 export const appendGuideLandmarks = (formData, guideData) => {
   const landmarks = guideData.landmarks || [];
