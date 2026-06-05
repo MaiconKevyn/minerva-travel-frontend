@@ -208,6 +208,8 @@ export const mappableLandmarks = (landmarks = []) =>
     })
     .filter(Boolean);
 
+export const hasMappableCoordinates = (landmark = {}) => mappableLandmarks([landmark]).length === 1;
+
 export const appendGuideLandmarks = (formData, guideData) => {
   const landmarks = guideData.landmarks || [];
   const catalogLandmarkIds = landmarks

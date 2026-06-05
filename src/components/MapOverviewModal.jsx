@@ -4,50 +4,13 @@ import { Check, Clock3, ExternalLink, MapPin, Plus, Route, X } from 'lucide-reac
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import {
+  clearGoogleMarkers,
+  googleMapsBrowserKey,
+  googleMapsMapId,
+  loadGoogleMaps,
+} from '@/utils/google-maps.js';
 import { mappableLandmarks } from '@/utils/minerva-api.js';
-
-let googleMapsLoaderPromise = null;
-
-const runtimeConfig = () => globalThis.__MINERVA_CONFIG__ || {};
-
-const googleMapsBrowserKey = () => (
-  import.meta.env?.VITE_GOOGLE_MAPS_BROWSER_KEY ||
-  runtimeConfig().VITE_GOOGLE_MAPS_BROWSER_KEY ||
-  ''
-);
-
-const googleMapsMapId = () => (
-  import.meta.env?.VITE_GOOGLE_MAPS_MAP_ID ||
-  runtimeConfig().VITE_GOOGLE_MAPS_MAP_ID ||
-  ''
-);
-
-const loadGoogleMaps = (apiKey) => {
-  if (globalThis.google?.maps?.importLibrary) {
-    return Promise.resolve(globalThis.google);
-  }
-
-  if (!googleMapsLoaderPromise) {
-    googleMapsLoaderPromise = new Promise((resolve, reject) => {
-      const existing = document.getElementById('minerva-google-maps-js');
-      if (existing) {
-        existing.addEventListener('load', () => resolve(globalThis.google), { once: true });
-        existing.addEventListener('error', reject, { once: true });
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.id = 'minerva-google-maps-js';
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly&libraries=marker&loading=async`;
-      script.async = true;
-      script.onload = () => resolve(globalThis.google);
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
-  }
-
-  return googleMapsLoaderPromise;
-};
 
 const createMarkerContent = (landmark, isSelected) => {
   const wrapper = document.createElement('button');
@@ -80,16 +43,6 @@ const createMarkerContent = (landmark, isSelected) => {
   wrapper.appendChild(status);
 
   return wrapper;
-};
-
-const clearMarkers = (markers) => {
-  markers.forEach((marker) => {
-    if ('map' in marker) {
-      marker.map = null;
-    } else if (typeof marker.setMap === 'function') {
-      marker.setMap(null);
-    }
-  });
 };
 
 const MapOverviewModal = ({
@@ -166,7 +119,7 @@ const MapOverviewModal = ({
         }
 
         mapRef.current = map;
-        clearMarkers(markersRef.current);
+        clearGoogleMarkers(markersRef.current);
 
         const bounds = new google.maps.LatLngBounds();
         const nextMarkers = mapLandmarks.map((landmark) => {
@@ -208,7 +161,7 @@ const MapOverviewModal = ({
 
     return () => {
       cancelled = true;
-      clearMarkers(markersRef.current);
+      clearGoogleMarkers(markersRef.current);
       markersRef.current = [];
     };
   }, [apiKey, mapId, mapLandmarks, open, selectedSet]);

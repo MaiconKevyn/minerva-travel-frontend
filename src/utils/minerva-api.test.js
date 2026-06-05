@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import * as minervaApi from './minerva-api.js';
 import {
   appendGuideLandmarks,
   buildLandmarkMapsUrl,
@@ -239,6 +240,14 @@ test('mappableLandmarks keeps only landmarks with numeric coordinates', () => {
   assert.deepEqual(items.map((item) => item.id), ['with-number', 'with-string']);
   assert.equal(items[1].latitude, 41.8902);
   assert.equal(items[1].longitude, 12.4922);
+});
+
+test('hasMappableCoordinates accepts only complete numeric coordinates', () => {
+  assert.equal(typeof minervaApi.hasMappableCoordinates, 'function');
+  assert.equal(minervaApi.hasMappableCoordinates({ latitude: 48.8566, longitude: 2.3522 }), true);
+  assert.equal(minervaApi.hasMappableCoordinates({ latitude: '41.8902', longitude: '12.4922' }), true);
+  assert.equal(minervaApi.hasMappableCoordinates({ latitude: 48.8566 }), false);
+  assert.equal(minervaApi.hasMappableCoordinates({ latitude: 'abc', longitude: 2.3522 }), false);
 });
 
 test('appendGuideLandmarks sends catalog ids and custom fallback separately', () => {
