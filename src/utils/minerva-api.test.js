@@ -123,6 +123,12 @@ test('mapRecommendationToParsedData treats Google Places stops as custom landmar
               country: 'Italia',
               description: ['Um anfiteatro historico.'],
               image: null,
+              image_attributions: [
+                {
+                  display_name: 'Maria Fotografa',
+                  uri: 'https://example.com/maria',
+                },
+              ],
               duration_minutes: 90,
               family_tip: 'Procure os arcos gigantes.',
               match_reasons: ['Interesse da familia: historia.'],
@@ -139,6 +145,12 @@ test('mapRecommendationToParsedData treats Google Places stops as custom landmar
   assert.deepEqual(data.destinations, [{ id: 'google-roma', city: 'Roma', country: 'Italia' }]);
   assert.equal(data.landmarks[0].id, 'google:abc123');
   assert.equal(data.landmarks[0].is_catalog_landmark, false);
+  assert.deepEqual(data.landmarks[0].image_attributions, [
+    {
+      display_name: 'Maria Fotografa',
+      uri: 'https://example.com/maria',
+    },
+  ]);
 });
 
 test('appendGuideLandmarks sends catalog ids and custom fallback separately', () => {

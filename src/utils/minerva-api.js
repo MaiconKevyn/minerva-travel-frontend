@@ -52,6 +52,7 @@ const mapStopToLandmark = (stop, day = null, isAlternative = false, isCatalogLan
   description: Array.isArray(stop.description) ? stop.description[0] : (stop.description || ''),
   description_paragraphs: Array.isArray(stop.description) ? stop.description : [stop.description].filter(Boolean),
   image: stop.image,
+  image_attributions: stop.image_attributions || [],
   destination_id: stop.destination_id,
   duration_minutes: stop.duration_minutes,
   family_tip: stop.family_tip,

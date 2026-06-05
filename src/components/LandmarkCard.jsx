@@ -17,6 +17,9 @@ const LandmarkCard = ({
   // Normalize the data based on the mode
   const data = isSelectionMode ? landmark : { id, number, image, city, name, curiosity, description };
   const displayCity = isSelectionMode ? (destination?.city || data.city) : data.city;
+  const photoAttribution = data.image_attributions?.find?.(
+    (attribution) => attribution.display_name || attribution.uri
+  );
 
   return (
     <motion.div
@@ -49,6 +52,25 @@ const LandmarkCard = ({
 
         {/* Subtle gradient overlay for better text contrast if we had text, and depth */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+        {photoAttribution && (
+          <div className="absolute left-3 bottom-3 z-10 max-w-[calc(100%-1.5rem)] rounded-full bg-black/55 backdrop-blur-sm px-3 py-1 text-[10px] font-medium text-white/90">
+            Foto:{' '}
+            {photoAttribution.uri ? (
+              <a
+                href={photoAttribution.uri}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => event.stopPropagation()}
+                className="underline decoration-white/50 underline-offset-2"
+              >
+                {photoAttribution.display_name || 'Google Places'}
+              </a>
+            ) : (
+              <span>{photoAttribution.display_name}</span>
+            )}
+          </div>
+        )}
 
         {/* Number Badge (Showcase Mode) */}
         {!isSelectionMode && data.number && (
