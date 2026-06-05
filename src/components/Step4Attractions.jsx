@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CalendarDays,
+  ListChecks,
   Loader2,
   RefreshCcw,
   SlidersHorizontal,
@@ -14,7 +15,9 @@ import { useConversationalGuide } from '@/contexts/ConversationalGuideContext.js
 import { Button } from '@/components/ui/button';
 import {
   discoverItinerary,
+  mapParsedLandmarksToParsedData,
   mapRecommendationToParsedData,
+  parseLandmarks,
 } from '@/utils/minerva-api.js';
 import LandmarkCard from './LandmarkCard.jsx';
 import DestinationGroup from './DestinationGroup.jsx';
@@ -58,6 +61,7 @@ const Step4Attractions = () => {
   } = useConversationalGuide();
 
   const [error, setError] = useState(null);
+  const [loadingMode, setLoadingMode] = useState('suggestion');
 
   const updatePreference = (key, value) => {
     setItineraryPreferences((prev) => ({ ...prev, [key]: value }));
@@ -75,6 +79,7 @@ const Step4Attractions = () => {
   const processAttractions = async () => {
     if (!destination.trim()) return;
 
+    setLoadingMode('suggestion');
     setIsLoadingLandmarks(true);
     setError(null);
 
@@ -105,6 +110,36 @@ const Step4Attractions = () => {
     }
   };
 
+  const processManualAttractions = async () => {
+    if (!destination.trim()) return;
+
+    setLoadingMode('manual');
+    setIsLoadingLandmarks(true);
+    setError(null);
+
+    try {
+      const parsedLandmarks = await parseLandmarks(destination);
+      const mapped = mapParsedLandmarksToParsedData(parsedLandmarks);
+
+      if (mapped.landmarks.length === 0) {
+        throw new Error('Nao encontrei pontos turisticos claros no roteiro informado.');
+      }
+
+      setParsedData({
+        destinations: mapped.destinations,
+        landmarks: mapped.landmarks,
+      });
+      setSelectedLandmarks(mapped.selectedLandmarks);
+      setRecommendedItinerary(null);
+      setHasSearchedLandmarks(true);
+    } catch (err) {
+      console.error('Error parsing manual landmarks:', err);
+      setError(err.message || 'Nao foi possivel organizar o roteiro informado.');
+    } finally {
+      setIsLoadingLandmarks(false);
+    }
+  };
+
   const selectedCount = selectedLandmarks.length;
   const catalogMode = Boolean(recommendedItinerary?.days?.length);
   const alternatives = parsedData.landmarks.filter((landmark) => landmark.is_alternative);
@@ -121,7 +156,7 @@ const Step4Attractions = () => {
           <Sparkles className="w-8 h-8" />
         </div>
         <h2 className="text-3xl md:text-4xl font-serif font-bold text-foreground">
-          Vamos sugerir um roteiro para a familia
+          Como voce quer montar o roteiro?
         </h2>
         <p className="text-lg text-muted-foreground font-medium max-w-2xl mx-auto">
           {destination}
@@ -200,9 +235,12 @@ const Step4Attractions = () => {
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4 pt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr_1fr] gap-4 pt-2">
           <Button onClick={goBack} variant="outline" className="rounded-full py-6 px-8 text-lg">
             <ArrowLeft className="w-5 h-5 mr-2" /> Editar destino
+          </Button>
+          <Button onClick={processManualAttractions} variant="outline" className="rounded-full py-6 px-8 text-lg font-bold">
+            <ListChecks className="w-5 h-5 mr-2" /> Usar meu roteiro
           </Button>
           <Button onClick={processAttractions} className="flex-1 rounded-full py-6 px-8 text-lg bg-primary hover:bg-primary/90 text-white font-bold">
             Sugerir roteiro <ArrowRight className="ml-2 w-5 h-5" />
@@ -338,8 +376,14 @@ const Step4Attractions = () => {
               />
             </div>
             <div className="space-y-3">
-              <h2 className="text-3xl font-serif font-bold text-foreground">Montando seu roteiro...</h2>
-              <p className="text-lg text-muted-foreground font-medium animate-pulse">Selecionando paradas com ritmo de familia.</p>
+              <h2 className="text-3xl font-serif font-bold text-foreground">
+                {loadingMode === 'manual' ? 'Organizando seu roteiro...' : 'Montando seu roteiro...'}
+              </h2>
+              <p className="text-lg text-muted-foreground font-medium animate-pulse">
+                {loadingMode === 'manual'
+                  ? 'Separando os locais que voce ja informou.'
+                  : 'Selecionando paradas com ritmo de familia.'}
+              </p>
             </div>
           </motion.div>
         ) : error ? (
@@ -361,7 +405,10 @@ const Step4Attractions = () => {
               <Button onClick={goBack} variant="outline" className="flex-1 rounded-full py-6 text-lg">
                 <ArrowLeft className="w-5 h-5 mr-2" /> Editar destino
               </Button>
-              <Button onClick={processAttractions} className="flex-1 rounded-full py-6 text-lg bg-primary hover:bg-primary/90 text-white">
+              <Button
+                onClick={loadingMode === 'manual' ? processManualAttractions : processAttractions}
+                className="flex-1 rounded-full py-6 text-lg bg-primary hover:bg-primary/90 text-white"
+              >
                 <RefreshCcw className="w-5 h-5 mr-2" /> Tentar novamente
               </Button>
             </div>
@@ -375,14 +422,14 @@ const Step4Attractions = () => {
           >
             <div className="text-center space-y-3 mb-12">
               <h2 className="text-3xl md:text-4xl font-serif font-bold text-foreground">
-                {catalogMode ? 'Roteiro sugerido para a sua familia' : 'Mapeamos atracoes fantasticas para voce!'}
+                {catalogMode ? 'Roteiro sugerido para a sua familia' : 'Seu roteiro informado'}
               </h2>
               <p className="text-xl text-muted-foreground font-medium max-w-2xl mx-auto">
-                {catalogMode ? recommendedItinerary.summary : 'Organizamos tudo pelo seu roteiro. Selecione os pontos que farao parte do guia da sua familia.'}
+                {catalogMode ? recommendedItinerary.summary : 'Organizamos os pontos que voce ja citou. Selecione os locais que farao parte do guia da sua familia.'}
               </p>
               <div className="flex justify-center pt-2">
                 <Button onClick={() => setHasSearchedLandmarks(false)} variant="outline" className="rounded-full px-6 py-3">
-                  Ajustar preferencias
+                  {catalogMode ? 'Ajustar preferencias' : 'Voltar para escolha do roteiro'}
                 </Button>
               </div>
             </div>

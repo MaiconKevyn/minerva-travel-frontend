@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   appendGuideLandmarks,
   inferCatalogDestinationIds,
+  mapParsedLandmarksToParsedData,
   mapRecommendationToParsedData,
 } from './minerva-api.js';
 
@@ -151,6 +152,43 @@ test('mapRecommendationToParsedData treats Google Places stops as custom landmar
       uri: 'https://example.com/maria',
     },
   ]);
+});
+
+test('mapParsedLandmarksToParsedData flattens manual landmarks without itinerary suggestions', () => {
+  const data = mapParsedLandmarksToParsedData({
+    selected_landmarks: ['custom-paris:torre-eiffel', 'custom-paris:louvre'],
+    destinations: [
+      {
+        id: 'custom-paris',
+        city: 'Paris',
+        country: 'Franca',
+        landmarks: [
+          {
+            id: 'torre-eiffel',
+            selection_id: 'custom-paris:torre-eiffel',
+            name: 'Torre Eiffel',
+            description: ['Visita ja planejada pela familia.'],
+            confidence: 0.94,
+          },
+          {
+            id: 'louvre',
+            selection_id: 'custom-paris:louvre',
+            name: 'Louvre',
+            description: ['Museu citado no roteiro.'],
+            confidence: 0.88,
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.deepEqual(data.destinations, [{ id: 'custom-paris', city: 'Paris', country: 'Franca' }]);
+  assert.deepEqual(data.selectedLandmarks, ['custom-paris:torre-eiffel', 'custom-paris:louvre']);
+  assert.equal(data.landmarks[0].id, 'custom-paris:torre-eiffel');
+  assert.equal(data.landmarks[0].destination_id, 'custom-paris');
+  assert.equal(data.landmarks[0].is_catalog_landmark, false);
+  assert.equal(data.landmarks[0].itinerary_day, null);
+  assert.equal(data.landmarks[0].description, 'Visita ja planejada pela familia.');
 });
 
 test('appendGuideLandmarks sends catalog ids and custom fallback separately', () => {

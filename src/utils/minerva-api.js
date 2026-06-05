@@ -102,6 +102,67 @@ export const mapRecommendationToParsedData = (recommendation, catalog) => {
   };
 };
 
+const mapManualLandmark = (landmark, destination = {}) => {
+  const selectionId = landmark.selection_id || landmark.id;
+  const descriptionParagraphs = Array.isArray(landmark.description)
+    ? landmark.description
+    : [landmark.description].filter(Boolean);
+  const image = typeof landmark.image === 'string'
+    ? landmark.image
+    : landmark.image?.image_url || null;
+
+  return {
+    ...landmark,
+    id: selectionId,
+    selection_id: selectionId,
+    landmark_id: landmark.id,
+    name: landmark.name,
+    city: landmark.city || destination.city || '',
+    country: landmark.country || destination.country || '',
+    confidence: landmark.confidence || 0.85,
+    description: descriptionParagraphs[0] || '',
+    description_paragraphs: descriptionParagraphs,
+    image,
+    image_attributions: landmark.image_attributions || [],
+    destination_id: landmark.destination_id || destination.id,
+    duration_minutes: landmark.duration_minutes || null,
+    family_tip: landmark.family_tip || null,
+    match_reasons: landmark.match_reasons || [],
+    categories: landmark.categories || [],
+    itinerary_day: null,
+    itinerary_title: '',
+    itinerary_theme: '',
+    is_catalog_landmark: false,
+    is_alternative: false,
+  };
+};
+
+export const mapParsedLandmarksToParsedData = (data) => {
+  const destinations = (data?.destinations || []).map((destination) => ({
+    ...destination,
+    id: destination.id,
+    city: destination.city || '',
+    country: destination.country || '',
+  }));
+  const nestedLandmarks = destinations.flatMap((destination) =>
+    (destination.landmarks || []).map((landmark) => mapManualLandmark(landmark, destination))
+  );
+  const flatLandmarks = (data?.landmarks || []).map((landmark) => {
+    const destination = destinations.find((item) => item.id === landmark.destination_id) || {};
+    return mapManualLandmark(landmark, destination);
+  });
+  const landmarks = uniqueById([...flatLandmarks, ...nestedLandmarks]);
+  const selectedLandmarks = data?.selected_landmarks?.length
+    ? data.selected_landmarks
+    : landmarks.map((landmark) => landmark.selection_id).filter(Boolean);
+
+  return {
+    destinations: destinations.map(({ landmarks: _landmarks, ...destination }) => destination),
+    landmarks,
+    selectedLandmarks,
+  };
+};
+
 export const appendGuideLandmarks = (formData, guideData) => {
   const landmarks = guideData.landmarks || [];
   const catalogLandmarkIds = landmarks
