@@ -54,6 +54,14 @@ test('runtime config loads before the React entrypoint', () => {
   assert.equal(index.indexOf('/config.js') < index.indexOf('/src/main.jsx'), true);
 });
 
+test('runtime config and HTML are not cached by Hostinger CDN', () => {
+  const htaccess = readProjectFile('public/.htaccess');
+
+  assert.match(htaccess, /Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"/);
+  assert.doesNotMatch(htaccess, /s-maxage=604800/);
+  assert.match(htaccess, /REQUEST_URI.+\^\/assets\/\.\*/);
+});
+
 test('password recovery route is wired to real auth flow', () => {
   const app = readProjectFile('src/App.jsx');
   const loginPage = readProjectFile('src/pages/LoginPage.jsx');

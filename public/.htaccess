@@ -8,11 +8,13 @@
 </IfModule>
 
 <IfModule mod_headers.c>
-	# Cache everything on CDN by default
-	Header set Cache-Control "public, s-maxage=604800, max-age=0"
+	# Runtime HTML and config must stay fresh after each deploy.
+	Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+	Header set Pragma "no-cache"
+	Header set Expires "0"
 
-	# Cache in browser all assets
+	# Cache hashed build assets aggressively.
 	<If "%{REQUEST_URI} =~ m#^/assets/.*$#">
-		Header set Cache-Control "public, max-age=604800"
+		Header set Cache-Control "public, max-age=604800, immutable"
 	</If>
 </IfModule>
