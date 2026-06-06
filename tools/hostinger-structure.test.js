@@ -50,7 +50,7 @@ test('runtime config loads before the React entrypoint', () => {
   const index = readProjectFile('index.html');
   const head = index.match(/<head>([\s\S]*?)<\/head>/)?.[1] || '';
 
-  assert.match(head, /<script src="\/config\.js"><\/script>/);
+  assert.match(head, /<script src="\/config\.js\?v=[^"]+"><\/script>/);
   assert.equal(index.indexOf('/config.js') < index.indexOf('/src/main.jsx'), true);
 });
 
