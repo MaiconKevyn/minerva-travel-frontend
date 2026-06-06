@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { Check, Clock3, Map as MapIcon, MapPin, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { buildLandmarkMapsUrl, hasMappableCoordinates } from '@/utils/minerva-api.js';
+import { landmarkMapAction } from '@/utils/minerva-api.js';
 import PlaceMapModal from './PlaceMapModal.jsx';
 
 const LandmarkCard = ({
@@ -23,12 +23,20 @@ const LandmarkCard = ({
   const photoAttribution = data.image_attributions?.find?.(
     (attribution) => attribution.display_name || attribution.uri
   );
-  const mapsUrl = data.maps_url || buildLandmarkMapsUrl({
+  const normalizedLandmark = {
     ...data,
     city: displayCity,
     country: destination?.country || data.country,
-  });
-  const canOpenEmbeddedMap = hasMappableCoordinates(data);
+  };
+  const mapAction = landmarkMapAction(normalizedLandmark);
+  const mapsUrl = mapAction.mapsUrl;
+  const canOpenEmbeddedMap = mapAction.mode === 'embedded';
+  const canShowMapAction = mapAction.mode !== 'none';
+
+  const openEmbeddedMap = (event) => {
+    event.stopPropagation();
+    setIsMapOpen(true);
+  };
 
   return (
     <>
@@ -68,10 +76,7 @@ const LandmarkCard = ({
               type="button"
               title={`Ver ${data.name} no mapa`}
               aria-label={`Ver ${data.name} no mapa`}
-              onClick={(event) => {
-                event.stopPropagation();
-                setIsMapOpen(true);
-              }}
+              onClick={openEmbeddedMap}
               className="absolute left-4 top-4 z-10 h-9 w-9 rounded-full bg-background/85 text-secondary shadow-sm backdrop-blur-sm border border-white/40 flex items-center justify-center transition-all hover:bg-background hover:text-primary hover:scale-105"
             >
               <MapIcon className="h-4 w-4" />
@@ -159,6 +164,32 @@ const LandmarkCard = ({
             {data.description || 'Um ponto turístico imperdível para sua viagem em família.'}
           </p>
 
+        {canShowMapAction && (
+          <div className="mb-5">
+            {canOpenEmbeddedMap ? (
+              <button
+                type="button"
+                onClick={openEmbeddedMap}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-secondary/30 bg-secondary/10 px-4 py-3 text-sm font-bold text-secondary transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+              >
+                <MapIcon className="h-4 w-4" />
+                Mapa
+              </button>
+            ) : (
+              <a
+                href={mapsUrl}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(event) => event.stopPropagation()}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-secondary/30 bg-secondary/10 px-4 py-3 text-sm font-bold text-secondary transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+              >
+                <MapIcon className="h-4 w-4" />
+                Mapa
+              </a>
+            )}
+          </div>
+        )}
+
         {isSelectionMode && (data.duration_minutes || data.match_reasons?.length > 0) && (
           <div className="space-y-3 mb-5">
             {data.duration_minutes && (
@@ -211,7 +242,7 @@ const LandmarkCard = ({
 
       <PlaceMapModal
         open={isMapOpen}
-        landmark={{ ...data, city: displayCity, country: destination?.country || data.country }}
+        landmark={normalizedLandmark}
         mapsUrl={mapsUrl}
         isSelected={isSelected}
         onToggle={isSelectionMode ? onToggle : null}

@@ -250,6 +250,33 @@ test('hasMappableCoordinates accepts only complete numeric coordinates', () => {
   assert.equal(minervaApi.hasMappableCoordinates({ latitude: 'abc', longitude: 2.3522 }), false);
 });
 
+test('landmarkMapAction chooses embedded map when coordinates exist and external fallback otherwise', () => {
+  assert.deepEqual(
+    minervaApi.landmarkMapAction({
+      name: 'Torre Eiffel',
+      city: 'Paris',
+      country: 'Franca',
+      latitude: 48.8584,
+      longitude: 2.2945,
+    }),
+    {
+      mode: 'embedded',
+      mapsUrl: 'https://www.google.com/maps/search/?api=1&query=Torre%20Eiffel%20Paris%20Franca',
+    },
+  );
+  assert.deepEqual(
+    minervaApi.landmarkMapAction({
+      name: 'Louvre',
+      city: 'Paris',
+      country: 'Franca',
+    }),
+    {
+      mode: 'external',
+      mapsUrl: 'https://www.google.com/maps/search/?api=1&query=Louvre%20Paris%20Franca',
+    },
+  );
+});
+
 test('appendGuideLandmarks sends catalog ids and custom fallback separately', () => {
   const formData = new FormData();
 

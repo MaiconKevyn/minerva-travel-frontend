@@ -210,6 +210,17 @@ export const mappableLandmarks = (landmarks = []) =>
 
 export const hasMappableCoordinates = (landmark = {}) => mappableLandmarks([landmark]).length === 1;
 
+export const landmarkMapAction = (landmark = {}) => {
+  const mapsUrl = landmark.maps_url || buildLandmarkMapsUrl(landmark);
+  if (hasMappableCoordinates(landmark)) {
+    return { mode: 'embedded', mapsUrl };
+  }
+  if (mapsUrl) {
+    return { mode: 'external', mapsUrl };
+  }
+  return { mode: 'none', mapsUrl: '' };
+};
+
 export const appendGuideLandmarks = (formData, guideData) => {
   const landmarks = guideData.landmarks || [];
   const catalogLandmarkIds = landmarks
